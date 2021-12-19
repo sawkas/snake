@@ -1,0 +1,17 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'io/console'
+require 'tco'
+require 'pry'
+require 'config'
+
+application_root_path = File.expand_path('..', __dir__)
+
+# Load config
+Config.load_and_set_settings(File.join(application_root_path, 'config.yml'))
+
+# Require all ruby files in the app folder
+Dir[File.join(application_root_path, '**', '*.rb')].sort.each { |file| require file }
+
+Snake::Game.new.start

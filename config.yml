@@ -1,0 +1,11 @@
+app:
+  size:
+    width: 25
+    height: 25
+  colors:
+    snake:
+      head: '#1300FE'
+      body: '#33DE00'
+    apple: '#FE0200'
+    area: '#000000'
+    wall: '#FFFFFF'
