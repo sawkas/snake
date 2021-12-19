@@ -12,6 +12,6 @@ application_root_path = File.expand_path('..', __dir__)
 Config.load_and_set_settings(File.join(application_root_path, 'config.yml'))
 
 # Require all ruby files in the app folder
-Dir[File.join(application_root_path, '**', '*.rb')].sort.each { |file| require file }
+Dir[File.join(application_root_path, 'lib', '**', '*.rb')].sort.each { |file| require file }
 
 Snake::Game.new.start

@@ -1,0 +1,242 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'io/console'
+
+WIDTH = 25
+HEIGHT = 25
+
+module Snake
+  module Cli
+    class Input
+      attr_reader :value
+
+      def initialize
+        @thread = nil
+        @value = nil
+      end
+
+      def start
+        @thread = Thread.new { @value = $stdin.getch }
+      end
+
+      def stop
+        @thread&.exit
+        @value = nil
+      end
+
+      def exit?
+        value == "\u0003" # CTRL + C
+      end
+
+      def snake_direction
+        CONTROLS[value]
+      end
+
+      CONTROLS = { 'w' => :up, 'a' => :left, 's' => :down, 'd' => :right }.freeze
+    end
+
+    class Output
+      def initialize(area, snake, input, steps)
+        @area = area
+        @snake = snake
+        @input = input
+        @steps = steps
+      end
+
+      def draw
+        output = info_string + game_string
+
+        input.stop
+        print(CLEAR_SEQUENCE) unless steps.zero?
+        print(output)
+        input.start
+      end
+
+      private
+
+      OUTPUT_LINES_COUNT = HEIGHT + 4
+      ONE_LINE_CLEAR_SEQUENCE = "\r#{' ' * `tput cols`.chomp.to_i}\e[F"
+      CLEAR_SEQUENCE = (ONE_LINE_CLEAR_SEQUENCE * OUTPUT_LINES_COUNT).freeze
+      SEPARATOR_LINE = ('==' * WIDTH).freeze
+
+      attr_reader :snake, :area, :input, :steps
+
+      def info_string
+        <<~INFO
+          #{SEPARATOR_LINE}
+          STEPS = #{steps}
+          LENGTH = #{snake.length}
+          #{SEPARATOR_LINE}
+        INFO
+      end
+
+      def game_string
+        string = ''
+
+        area.height.times do |y|
+          area.width.times do |x|
+            string +=
+              if area.wall?(x, y)
+                '##'
+              elsif snake.head?(x, y)
+                '11'
+              elsif snake.body?(x, y)
+                '00'
+              elsif area.apple?(x, y)
+                'AA'
+              else
+                '  '
+              end
+          end
+          string += "\n"
+        end
+
+        string
+      end
+    end
+  end
+
+  module Resources
+    class Area
+      Apple = Struct.new(:x, :y)
+
+      attr_reader :width, :height, :apple
+
+      def initialize(width, height)
+        @width = width
+        @height = height
+        new_apple
+      end
+
+      def wall?(x, y)
+        return true if x.zero?
+        return true if y.zero?
+
+        return true if x == width - 1
+        return true if y == height - 1
+
+        false
+      end
+
+      def apple?(x, y)
+        apple.x == x && apple.y == y
+      end
+
+      def new_apple
+        @apple = Apple.new(rand(1..width - 2), rand(1..height - 2))
+      end
+    end
+
+    class Snake
+      BodyCell = Struct.new(:x, :y)
+
+      attr_accessor :direction
+      attr_reader :body, :alive
+
+      DIRECTIONS = %i[up right down left].freeze
+
+      def initialize(x, y)
+        @body = [BodyCell.new(x, y)]
+        @direction = DIRECTIONS.sample
+        @alive = true
+      end
+
+      def head?(x, y)
+        head.x == x && head.y == y
+      end
+
+      def body?(x, y)
+        body.any? { |bc| bc.x == x && bc.y == y }
+      end
+
+      def step(area)
+        new_head = build_new_head
+
+        if area.wall?(new_head.x, new_head.y) || body?(new_head.x, new_head.y)
+          @alive = false
+
+          return
+        end
+
+        body.pop unless area.apple?(new_head.x, new_head.y)
+        body.unshift(new_head)
+      end
+
+      def length
+        body.size
+      end
+
+      private
+
+      def head
+        body.first
+      end
+
+      def build_new_head
+        new_head = head.dup
+
+        case direction
+        when :up
+          new_head.y -= 1
+        when :down
+          new_head.y += 1
+        when :right
+          new_head.x += 1
+        when :left
+          new_head.x -= 1
+        end
+
+        new_head
+      end
+    end
+  end
+
+  class Game
+    def initialize
+      @area = Resources::Area.new(WIDTH, HEIGHT)
+      @snake = Resources::Snake.new(WIDTH / 2, HEIGHT / 2)
+      @steps = 0
+    end
+
+    def start
+      while snake.alive && !input.exit?
+        step
+
+        sleep(0.2)
+      end
+
+      finish
+    end
+
+    private
+
+    attr_reader :area, :snake, :steps
+
+    def step
+      snake.direction = input.snake_direction if input.snake_direction
+
+      snake.step(area)
+
+      area.new_apple if snake.head?(area.apple.x, area.apple.y)
+
+      output.draw
+
+      @steps = steps + 1
+    end
+
+    def finish
+      input.stop
+    end
+
+    def input
+      @input ||= Cli::Input.new
+    end
+
+    def output
+      Cli::Output.new(area, snake, input, steps)
+    end
+  end
+end
+
+Snake::Game.new.start
